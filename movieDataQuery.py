@@ -1,139 +1,237 @@
 import argparse
 import csv
+import sys
+import json
+
+def validInt(value):
+    try:
+        return int(value)
+    except ValueError:
+        print("Input Error: " + value + " is not a valid integer")
+        sys.exit()
+
+def validFloat(value):
+    try:
+        return float(value)
+    except ValueError:
+        print("Input Error: " + value + " is not a valid float")
+        sys.exit()
 
 parser = argparse.ArgumentParser(description="Process movie queries")
 
 parser.add_argument("--input", type=str, help="Name of input file")
-parser.add_argument("--year-after", dest="year_after", type=int, help="Movie made after a given year")
-parser.add_argument("--year-before", dest="year_before", type=int, help="Movie made before a given year")
+parser.add_argument("--year-after", dest="year_after", type=validInt, help="Movie made after a given year")
+parser.add_argument("--year-before", dest="year_before", type=validInt, help="Movie made before a given year")
 parser.add_argument("--genre", type=str, help="Genre of movie")
-parser.add_argument("--rating-above", dest="rating_above", type=float, help="Movie with IMDb rating above a given value")
-parser.add_argument("--rating-below", dest="rating_below", type=float, help="Movie with IMDb rating below a given value")
+parser.add_argument("--rating-above", dest="rating_above", type=validFloat, help="Movie with IMDb rating above a given value")
+parser.add_argument("--rating-below", dest="rating_below", type=validFloat, help="Movie with IMDb rating below a given value")
 parser.add_argument("--director", type=str, help="Director of movie")
-parser.add_argument("--actor", type=str, help="Director of movie")
-parser.add_argument("--runtime-more-than", dest="runtime_more_than", type=int, help="Movie longer in duration than a given value")
-parser.add_argument("--runtime-less-than", dest="runtime_less_than", type=int, help="Movie shorter in duration than a given value")
-parser.add_argument("--gross-min", dest="gross_min", type=int, help="Minimum gross revenue a movie should have")
-parser.add_argument("--gross-max", dest="gross_max", type=int, help="Maximum gross revenue a movie should have")
+parser.add_argument("--actor", type=str, help="Actor in movie")
+parser.add_argument("--runtime-more-than", dest="runtime_more_than", type=validInt, help="Movie longer in duration than a given value")
+parser.add_argument("--runtime-less-than", dest="runtime_less_than", type=validInt, help="Movie shorter in duration than a given value")
+parser.add_argument("--gross-min", dest="gross_min", type=validInt, help="Minimum gross revenue a movie should have")
+parser.add_argument("--gross-max", dest="gross_max", type=validInt, help="Maximum gross revenue a movie should have")
+parser.add_argument("--output-format", choices=["json", "csv", "text"], default="text", help="Output format: json, csv, or text")
+parser.add_argument("--output-file", type=str, default="filtered_movies", help="Name of output file")
+parser.add_argument("--top-10", type=str, choices=["highest-rated", "most-popular", "highest-grossing"], help="Generate Top 10 list by highest-rated, most-popular, or highest-grossing")
+parser.add_argument("--genre-insights", action="store_true", help="Display average rating, gross, and runtime by genre")
+parser.add_argument("--find-hidden-gems", action="store_true", help="List highly rated but low vote count movies")
+parser.add_argument("--export-log", type=str, help="Export summary report to a text file")
 
 args = parser.parse_args()
 
 inputFile = args.input
-yearAfter = args.year_after
-yearBefore = args.year_before
-genre = args.genre
-ratingAbove = args.rating_above
-ratingBelow = args.rating_below
-director = args.director
-actor = args.actor
-runtimeMoreThan = args.runtime_more_than
-runtimeLessThan = args.runtime_less_than
-grossMin = args.gross_min
-grossMax = args.gross_max
 
-# Header: ['series_title', 'released_year', 'certificate', 'runtime', 'genre', 'imdb_rating', 'overview', 'meta_score', 'director', 'star_1', 'star_2', 'star_3', 'star_4', 'no_of_votes', 'gross']
-testMovie = ['The Dark Knight', '2008', 'UA', '152 min', 'Action, Crime, Drama', '9', 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.', '84', 'Christopher Nolan', 'Christian Bale', 'Heath Ledger', 'Aaron Eckhart', 'Michael Caine', '2303232', '534,858,444']
-queryFilters = [inputFile, yearAfter, yearBefore, genre, ratingAbove, ratingBelow, director, actor, runtimeMoreThan, runtimeLessThan, grossMin, grossMax]
+filters = {"year_after": args.year_after, "year_before": args.year_before, "genre": args.genre, "rating_above": args.rating_above, "rating_below": args.rating_below, "director": args.director, "actor": args.actor, "runtime_more_than": args.runtime_more_than, "runtime_less_than": args.runtime_less_than, "gross_min": args.gross_min, "gross_max": args.gross_max}
 
 def isValidMovie(movie, filters):
-    yearAfter = filters[1]
-    if (not(movie[1].isdigit())):
-        if (yearAfter != None):
+    try:
+        yearMade = int(movie["released_year"])
+    except:
+        if filters["year_after"] != None or filters["year_before"] != None:
             return False
     else:
-        yearMade = int(movie[1])
-        if (yearAfter != None) and (yearMade <= yearAfter):
+        if filters["year_after"] != None and yearMade <= filters["year_after"]:
             return False
-    
-    yearBefore = filters[2]
-    if (not(movie[1].isdigit())):
-        if (yearBefore != None):
-            return False
-    else:
-        yearMade = int(movie[1])
-        if (yearBefore != None) and (yearMade >= yearBefore):
-            return False
-    
-    genreList = movie[4].split(", ")
-    filterGenre = filters[3]
-    if (filterGenre != None) and (filterGenre not in genreList):
-        return False
-    
-    ratingAbove = filters[4]
-    if (movie[5] == ''):
-        if (ratingAbove != None):
-            return False
-    else:
-        imdbRating = float(movie[5])
-        if (ratingAbove != None) and (imdbRating <= ratingAbove):
-            return False
-    
-    ratingBelow = filters[5]
-    if (movie[5] == ''):
-        if (ratingBelow != None):
-            return False
-    else:
-        imdbRating = float(movie[5])
-        if (ratingBelow != None) and (imdbRating >= ratingBelow):
-            return False
-    
-    directorFilter = filters[6]
-    if (movie[8] == '' and directorFilter != None):
-        return False
-    director = movie[8]
-    if (directorFilter != None) and (director != directorFilter):
-        return False
-    
-    actorFilter = filters[7]
-    actorList = [movie[9], movie[10], movie[11], movie[12]]
-    if (actorFilter != None) and (actorFilter not in actorList):
-        return False
-    
-    runtimeMoreThan = filters[8]
-    if (movie[3] == ''):
-        if (runtimeMoreThan != None):
-            return False
-    else:
-        runtime = int(''.join(filter(str.isdigit, movie[3])))
-        if (runtimeMoreThan != None) and (runtime <= runtimeMoreThan):
-            return False
-    
-    runtimeLessThan = filters[9]
-    if (movie[3] == ''):
-        if (runtimeLessThan != None):
-            return False
-    else:
-        runtime = int(''.join(filter(str.isdigit, movie[3])))
-        if (runtimeLessThan != None) and (runtime >= runtimeLessThan):
-            return False
-    
-    grossMin = filters[10]
-    if (movie[14] == ''):
-        if (grossMin != None):
-            return False
-    else:
-        grossRevenue = int(''.join(filter(str.isdigit, movie[14])))
-        if (grossMin != None) and (grossRevenue < grossMin):
+        if filters["year_before"] != None and yearMade >= filters["year_before"]:
             return False
 
-    grossMax = filters[11]
-    if (movie[14] == ''):
-        if (grossMax != None):
+    if filters["genre"] != None:
+        genreList = movie["genre"].split(", ")
+        if filters["genre"] not in genreList:
+            return False
+
+    try:
+        imdbRating = float(movie["imdb_rating"])
+    except:
+        if filters["rating_above"] != None or filters["rating_below"] != None:
             return False
     else:
-        grossRevenue = int(''.join(filter(str.isdigit, movie[14])))
-        if (grossMax != None) and (grossRevenue > grossMax):
+        if filters["rating_above"] != None and imdbRating <= filters["rating_above"]:
             return False
-    
+        if filters["rating_below"] != None and imdbRating >= filters["rating_below"]:
+            return False
+
+    if filters["director"] != None:
+        if movie["director"] == "" or movie["director"] != filters["director"]:
+            return False
+
+    if filters["actor"] != None:
+        actorList = [movie["star_1"], movie["star_2"], movie["star_3"], movie["star_4"]]
+        if filters["actor"] not in actorList:
+            return False
+
+    try:
+        runtime = int(''.join(filter(str.isdigit, movie["runtime"])))
+    except:
+        if filters["runtime_more_than"] != None or filters["runtime_less_than"] != None:
+            return False
+    else:
+        if filters["runtime_more_than"] != None and runtime <= filters["runtime_more_than"]:
+            return False
+        if filters["runtime_less_than"] != None and runtime >= filters["runtime_less_than"]:
+            return False
+
+    try:
+        grossRevenue = int(''.join(filter(str.isdigit, movie["gross"])))
+    except:
+        if filters["gross_min"] != None or filters["gross_max"] != None:
+            return False
+    else:
+        if filters["gross_min"] != None and grossRevenue < filters["gross_min"]:
+            return False
+        if filters["gross_max"] != None and grossRevenue > filters["gross_max"]:
+            return False
+
     return True
-    
+
+filteredMovieList = []
+
 try:
     with open(inputFile, 'r', encoding='utf-8') as file:
-        csvreader = csv.reader(file)
-        header = next(csvreader)
-        #print("Header:", header)
+        csvreader = csv.DictReader(file)
         for row in csvreader:
-            if isValidMovie(row, queryFilters):
-                print(row)
+            if isValidMovie(row, filters):
+                filteredMovieList.append(row)
 except FileNotFoundError:
-    print("Error: Input file not found.")
+    print("File Error: Input file not found.")
+    sys.exit()
+
+print("\nFiltered Movie List:\n")
+for movie in filteredMovieList:
+    for attribute, value in movie.items():
+        print(attribute + ": " + value)
+    print("\n")
+
+output_format = args.output_format
+output_file = args.output_file
+
+if not output_file.endswith("." + output_format if output_format != "text" else ".txt"):
+    print("Warning: Output file extension does not match specified output format.")
+
+try:
+    if output_format == "json":
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(filteredMovieList, f, indent=4)
+    elif output_format == "csv":
+        if filteredMovieList:
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=filteredMovieList[0].keys())
+                writer.writeheader()
+                writer.writerows(filteredMovieList)
+    elif output_format == "text":
+        with open(output_file, "w", encoding="utf-8") as f:
+            for movie in filteredMovieList:
+                for attribute, value in movie.items():
+                    f.write(attribute + ": " + str(value) + "\n")
+                f.write("\n")
+    print("\nFiltered movies saved to " + output_file)
+except Exception as e:
+    print("Error writing output file: " + str(e))
+
+def to_int(value):
+    try:
+        return int(value.replace(",", ""))
+    except:
+        return None
+
+def to_float(value):
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        value = value.lower().replace(',', '')
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+def extract_runtime(value):
+    try:
+        return int(''.join(filter(str.isdigit, value)))
+    except:
+        return None
+
+if args.export_log:
+    export_lines = []
+
+    if args.top_10:
+        key = ""
+        if args.top_10 == "highest-rated":
+            key = "imdb_rating"
+        elif args.top_10 == "most-popular":
+            key = "no_of_votes"
+        elif args.top_10 == "highest-grossing":
+            key = "gross"
+
+        export_lines.append("Top 10 Movies by " + args.top_10.replace("-", " ").title() + ":\n")
+
+        sorted_movies = sorted(filteredMovieList, key=lambda x: to_float(x.get(key, 0)) or 0, reverse=True)
+        for i, movie in enumerate(sorted_movies[:10]):
+            export_lines.append(str(i+1) + ". " + movie.get("series_title", "N/A") + " (" + movie.get("released_year", "N/A") + ") - " + key + ": " + movie.get(key, "N/A"))
+        export_lines.append("\n")
+
+    if args.genre_insights:
+        genre_stats = {}
+        for movie in filteredMovieList:
+            genres = movie["genre"].split(", ")
+            rating = to_float(movie.get("imdb_rating", "0"))
+            gross = to_int(movie.get("gross", "0"))
+            runtime = extract_runtime(movie.get("runtime", "0"))
+
+            for genre in genres:
+                if genre not in genre_stats:
+                    genre_stats[genre] = {"ratings": [], "gross": [], "runtime": []}
+                if rating is not None:
+                    genre_stats[genre]["ratings"].append(rating)
+                if gross is not None:
+                    genre_stats[genre]["gross"].append(gross)
+                if runtime is not None:
+                    genre_stats[genre]["runtime"].append(runtime)
+
+        export_lines.append("Genre-Based Insights:\n")
+        for genre, stats in genre_stats.items():
+            avg_rating = sum(stats["ratings"]) / len(stats["ratings"]) if stats["ratings"] else 0
+            avg_gross = sum(stats["gross"]) / len(stats["gross"]) if stats["gross"] else 0
+            avg_runtime = sum(stats["runtime"]) / len(stats["runtime"]) if stats["runtime"] else 0
+            export_lines.append("Genre: " + genre)
+            export_lines.append("  Avg Rating: " + str(round(avg_rating, 2)))
+            export_lines.append("  Avg Gross: $" + str(round(avg_gross)))
+            export_lines.append("  Avg Runtime: " + str(round(avg_runtime)) + " min\n")
+
+    if args.find_hidden_gems:
+        export_lines.append("Hidden Gems (IMDb Rating >= 8.0 and Votes <= 50000):\n")
+        for movie in filteredMovieList:
+            rating = to_float(movie.get("imdb_rating", "0"))
+            votes = to_int(movie.get("no_of_votes", "0"))
+            if rating is not None and votes is not None and rating >= 8.0 and votes <= 50000:
+                export_lines.append("- " + movie.get("series_title", "N/A") + " (" + movie.get("released_year", "N/A") + ") - Rating: " + str(rating) + ", Votes: " + str(votes))
+        export_lines.append("\n")
+
+    try:
+        with open(args.export_log, "w", encoding="utf-8") as log_file:
+            for line in export_lines:
+                log_file.write(line + "\n")
+        print("Export log saved to " + args.export_log)
+    except Exception as e:
+        print("Failed to write export log: " + str(e))
